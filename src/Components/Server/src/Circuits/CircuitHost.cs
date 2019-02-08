@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Components.Browser;
 using Microsoft.AspNetCore.Components.Browser.Rendering;
 using Microsoft.AspNetCore.Components.Builder;
 using Microsoft.AspNetCore.Components.Hosting;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 
@@ -50,7 +49,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
 
         public CircuitHost(
             IServiceScope scope,
-            IClientProxy client,
+            DelegatingClientProxy client,
             RendererRegistry rendererRegistry,
             RemoteRenderer renderer,
             Action<IComponentsApplicationBuilder> configure,
@@ -77,7 +76,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
 
         public Circuit Circuit { get; }
 
-        public IClientProxy Client { get; }
+        public DelegatingClientProxy Client { get; }
 
         public IJSRuntime JSRuntime { get; }
 
@@ -108,10 +107,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
                     await _circuitHandlers[i].OnCircuitOpenedAsync(Circuit, cancellationToken);
                 }
 
-                for (var i = 0; i < _circuitHandlers.Length; i++)
-                {
-                    await _circuitHandlers[i].OnConnectionUpAsync(Circuit, cancellationToken);
-                }
+                await OnConnectionUpAsync(cancellationToken);
             });
 
             _initialized = true;
@@ -135,14 +131,33 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
             }
         }
 
-        public async ValueTask DisposeAsync()
+        public Task OnConnectionUpAsync(CancellationToken cancellationToken)
         {
-            await Renderer.InvokeAsync(async () =>
+            return Renderer.InvokeAsync(async () =>
+            {
+                for (var i = 0; i < _circuitHandlers.Length; i++)
+                {
+                    await _circuitHandlers[i].OnConnectionUpAsync(Circuit, cancellationToken);
+                }
+            });
+        }
+
+        public Task OnConnectionDownAsync()
+        {
+            return Renderer.InvokeAsync(async () =>
             {
                 for (var i = 0; i < _circuitHandlers.Length; i++)
                 {
                     await _circuitHandlers[i].OnConnectionDownAsync(Circuit, default);
                 }
+            });
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await Renderer.InvokeAsync(async () =>
+            {
+                await OnConnectionDownAsync();
 
                 for (var i = 0; i < _circuitHandlers.Length; i++)
                 {

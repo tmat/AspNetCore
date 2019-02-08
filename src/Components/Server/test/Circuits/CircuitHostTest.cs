@@ -127,7 +127,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
             CircuitHandler[] handlers = null)
         {
             serviceScope = serviceScope ?? Mock.Of<IServiceScope>();
-            var clientProxy = Mock.Of<IClientProxy>();
+            var clientProxy = new DelegatingClientProxy { Client = Mock.Of<IClientProxy>() };
             var renderRegistry = new RendererRegistry();
             var jsRuntime = Mock.Of<IJSRuntime>();
 

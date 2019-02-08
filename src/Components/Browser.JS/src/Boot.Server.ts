@@ -6,70 +6,97 @@ import { OutOfProcessRenderBatch } from './Rendering/RenderBatch/OutOfProcessRen
 import { internalFunctions as uriHelperFunctions } from './Services/UriHelper';
 import { renderBatch } from './Rendering/Renderer';
 import { fetchBootConfigAsync, loadEmbeddedResourcesAsync } from './BootCommon';
+import { CircuitHandler } from './Platform/Circuits/CircuitHandler';
 
-let connection : signalR.HubConnection;
+async function boot(reconnect: boolean = false) {
+  const circuitHandlers = new Array<CircuitHandler>();
+  window['Blazor'].addCircuitHandler = (circuitHandler: CircuitHandler) => circuitHandlers.push(circuitHandler);
 
-function boot() {
-  // In the background, start loading the boot config and any embedded resources
-  const embeddedResourcesPromise = fetchBootConfigAsync().then(bootConfig => {
-    return loadEmbeddedResourcesAsync(bootConfig);
-  });
+  await startCicuit();
 
-  connection = new signalR.HubConnectionBuilder()
-    .withUrl('_blazor')
-    .withHubProtocol(new MessagePackHubProtocol())
-    .configureLogging(signalR.LogLevel.Information)
-    .build();
+  async function startCicuit(): Promise<void> {
+    // In the background, start loading the boot config and any embedded resources
+    const embeddedResourcesPromise = fetchBootConfigAsync().then(bootConfig => {
+      return loadEmbeddedResourcesAsync(bootConfig);
+    });
 
-  connection.on('JS.BeginInvokeJS', DotNet.jsCallDispatcher.beginInvokeJSFromDotNet);
-  connection.on('JS.RenderBatch', (browserRendererId: number, renderId: number, batchData: Uint8Array) => {
-    try {
-      renderBatch(browserRendererId, new OutOfProcessRenderBatch(batchData));
-      connection.send('OnRenderCompleted', renderId, null);
-    } catch (ex) {
-      // If there's a rendering exception, notify server *and* throw on client
-      connection.send('OnRenderCompleted', renderId, ex.toString());
-      throw ex;
-    }
-  });
+    const initialConnection = await initializeConnection();
 
-  connection.on('JS.Error', unhandledError);
+    // Ensure any embedded resources have been loaded before starting the app
+    await embeddedResourcesPromise;
+    const circuitId = await initialConnection.invoke<string>(
+      'StartCircuit',
+      uriHelperFunctions.getLocationHref(),
+      uriHelperFunctions.getBaseURI()
+    );
 
-  connection.start()
-    .then(async () => {
+    window['Blazor'].reconnect = async () => {
+      const reconnection = await initializeConnection();
+      if (!await reconnection.invoke<Boolean>('ConnectCircuit', circuitId)) {
+        throw "Failed to reconnect to the server";
+      }
+
+      circuitHandlers.forEach(h => h.onConnectionUp());
+    };
+
+    circuitHandlers.forEach(h => h.onConnectionUp());
+  }
+
+  async function initializeConnection(): Promise<signalR.HubConnection> {
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl('_blazor')
+      .withHubProtocol(new MessagePackHubProtocol())
+      .configureLogging(signalR.LogLevel.Information)
+      .build();
+    connection.on('JS.BeginInvokeJS', DotNet.jsCallDispatcher.beginInvokeJSFromDotNet);
+    connection.on('JS.RenderBatch', (browserRendererId: number, renderId: number, batchData: Uint8Array) => {
+      try {
+        renderBatch(browserRendererId, new OutOfProcessRenderBatch(batchData));
+        connection.send('OnRenderCompleted', renderId, null);
+      }
+      catch (ex) {
+        // If there's a rendering exception, notify server *and* throw on client
+        connection.send('OnRenderCompleted', renderId, ex.toString());
+        throw ex;
+      }
+    });
+
+    connection.onclose(error => circuitHandlers.forEach(h => h.onConnectionDown(error)));
+    connection.on('JS.Error', unhandledError.bind(connection));
+
+    window['Blazor'].closeConnection = async() => {
+      await connection.stop();
       DotNet.attachDispatcher({
-        beginInvokeDotNetFromJS: (callId, assemblyName, methodIdentifier, dotNetObjectId, argsJson) => {
-          connection.send('BeginInvokeDotNetFromJS', callId ? callId.toString() : null, assemblyName, methodIdentifier, dotNetObjectId || 0, argsJson);
-        }
-      });
+        beginInvokeDotNetFromJS: (...args) => {}});
+    }
 
-      // Ensure any embedded resources have been loaded before starting the app
-      await embeddedResourcesPromise;
+    try {
+      await connection.start();
+    } catch (ex) {
+      unhandledError.call(connection, ex);
+    }
 
-      connection.send(
-        'StartCircuit',
-        uriHelperFunctions.getLocationHref(),
-        uriHelperFunctions.getBaseURI()
-      );
-    })
-    .catch(unhandledError);
+    DotNet.attachDispatcher({
+      beginInvokeDotNetFromJS: (callId, assemblyName, methodIdentifier, dotNetObjectId, argsJson) => {
+        connection.send('BeginInvokeDotNetFromJS', callId ? callId.toString() : null, assemblyName, methodIdentifier, dotNetObjectId || 0, argsJson);
+      }
+    });
 
-  // Temporary undocumented API to help with https://github.com/aspnet/Blazor/issues/1339
-  // This will be replaced once we implement proper connection management (reconnects, etc.)
-  window['Blazor'].onServerConnectionClose = connection.onclose.bind(connection);
-}
+    return connection;
+  }
 
-function unhandledError(err) {
-  console.error(err);
+  function unhandledError(this: signalR.HubConnection, err) {
+    console.error(err);
 
-  // Disconnect on errors.
-  //
-  // TODO: it would be nice to have some kind of experience for what happens when you're
-  // trying to interact with an app that's disconnected.
-  //
-  // Trying to call methods on the connection after its been closed will throw.
-  if (connection) {
-    connection.stop();
+    // Disconnect on errors.
+    //
+    // TODO: it would be nice to have some kind of experience for what happens when you're
+    // trying to interact with an app that's disconnected.
+    //
+    // Trying to call methods on the connection after its been closed will throw.
+    if (this) {
+      this.stop();
+    }
   }
 }
 

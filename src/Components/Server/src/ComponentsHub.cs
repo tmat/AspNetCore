@@ -19,6 +19,7 @@ namespace Microsoft.AspNetCore.Components.Server
     {
         private static readonly object CircuitKey = new object();
         private readonly CircuitFactory _circuitFactory;
+        private readonly CircuitRegistry _circuitRegistry;
         private readonly ILogger _logger;
 
         /// <summary>
@@ -28,6 +29,7 @@ namespace Microsoft.AspNetCore.Components.Server
         public ComponentsHub(IServiceProvider services, ILogger<ComponentsHub> logger)
         {
             _circuitFactory = services.GetRequiredService<CircuitFactory>();
+            _circuitRegistry = services.GetRequiredService<CircuitRegistry>();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -48,15 +50,23 @@ namespace Microsoft.AspNetCore.Components.Server
         /// <summary>
         /// Intended for framework use only. Applications should not call this method directly.
         /// </summary>
-        public override async Task OnDisconnectedAsync(Exception exception)
+        public override Task OnDisconnectedAsync(Exception exception)
         {
-            await CircuitHost.DisposeAsync();
+            var circuitHost = CircuitHost;
+            if (circuitHost == null)
+            {
+                return Task.CompletedTask;
+            }
+
+            CircuitHost = null;
+            _circuitRegistry.AddInactiveCircuit(circuitHost);
+            return circuitHost.OnConnectionDownAsync();
         }
 
         /// <summary>
         /// Intended for framework use only. Applications should not call this method directly.
         /// </summary>
-        public async Task StartCircuit(string uriAbsolute, string baseUriAbsolute)
+        public async Task<string> StartCircuit(string uriAbsolute, string baseUriAbsolute)
         {
             var circuitHost = _circuitFactory.CreateCircuitHost(Context.GetHttpContext(), Clients.Caller);
             circuitHost.UnhandledException += CircuitHost_UnhandledException;
@@ -68,6 +78,24 @@ namespace Microsoft.AspNetCore.Components.Server
             await circuitHost.InitializeAsync(Context.ConnectionAborted);
 
             CircuitHost = circuitHost;
+
+            return circuitHost.CircuitId;
+        }
+
+        /// <summary>
+        /// Intended for framework use only. Applications should not call this method directly.
+        /// </summary>
+        public async Task<bool> ConnectCircuit(string circuitId)
+        {
+            if (!_circuitRegistry.TryGetInactiveCircuit(circuitId, out var circuitHost))
+            {
+                return false;
+            }
+
+            CircuitHost = circuitHost;
+            circuitHost.Client.Client = Clients.Caller;
+            await circuitHost.OnConnectionUpAsync(Context.ConnectionAborted);
+            return true;
         }
 
         /// <summary>

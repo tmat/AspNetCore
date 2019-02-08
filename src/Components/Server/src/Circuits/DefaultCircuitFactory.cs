@@ -43,8 +43,9 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
                 throw new InvalidOperationException(message);
             }
 
+            var delegatingClient = new DelegatingClientProxy { Client = client };
             var scope = _scopeFactory.CreateScope();
-            var jsRuntime = new RemoteJSRuntime(client);
+            var jsRuntime = new RemoteJSRuntime(delegatingClient);
             var rendererRegistry = new RendererRegistry();
             var dispatcher = Renderer.CreateDefaultDispatcher();
             var renderer = new RemoteRenderer(
@@ -61,7 +62,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
 
             var circuitHost = new CircuitHost(
                 scope,
-                client,
+                delegatingClient,
                 rendererRegistry,
                 renderer,
                 config,
