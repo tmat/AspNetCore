@@ -102,7 +102,7 @@ namespace Microsoft.Extensions.DependencyInjection
             services.TryAddScoped<IJSRuntimeAccessor, DefaultJSRuntimeAccessor>();
             services.TryAddScoped(s => s.GetRequiredService<IJSRuntimeAccessor>().JSRuntime);
             services.TryAddScoped<IUriHelper, RemoteUriHelper>();
-            services.TryAddSingleton<CircuitRegistry>();
+            services.TryAddSingleton<DisconnectedCircuitRegistry>();
 
             // We've discussed with the SignalR team and believe it's OK to have repeated
             // calls to AddSignalR (making the nonfirst ones no-ops). If we want to change

@@ -19,7 +19,7 @@ namespace Microsoft.AspNetCore.Components.Server
     {
         private static readonly object CircuitKey = new object();
         private readonly CircuitFactory _circuitFactory;
-        private readonly CircuitRegistry _circuitRegistry;
+        private readonly DisconnectedCircuitRegistry _circuitRegistry;
         private readonly ILogger _logger;
 
         /// <summary>
@@ -29,7 +29,7 @@ namespace Microsoft.AspNetCore.Components.Server
         public ComponentsHub(IServiceProvider services, ILogger<ComponentsHub> logger)
         {
             _circuitFactory = services.GetRequiredService<CircuitFactory>();
-            _circuitRegistry = services.GetRequiredService<CircuitRegistry>();
+            _circuitRegistry = services.GetRequiredService<DisconnectedCircuitRegistry>();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 

@@ -7,10 +7,11 @@ import { internalFunctions as uriHelperFunctions } from './Services/UriHelper';
 import { renderBatch } from './Rendering/Renderer';
 import { fetchBootConfigAsync, loadEmbeddedResourcesAsync } from './BootCommon';
 import { CircuitHandler } from './Platform/Circuits/CircuitHandler';
+import { AutoReconnectCircuitHandler } from './Platform/Circuits/AutoReconnectCircuitHandler';
 
 async function boot() {
-  const circuitHandlers: CircuitHandler[] = [];
-  window['Blazor'].addCircuitHandler = (circuitHandler: CircuitHandler) => circuitHandlers.push(circuitHandler);
+  const circuitHandlers: CircuitHandler[] = [ new AutoReconnectCircuitHandler() ];
+  window['Blazor'].circuitHandlers = circuitHandlers;
 
   // In the background, start loading the boot config and any embedded resources
   const embeddedResourcesPromise = fetchBootConfigAsync().then(bootConfig => {
@@ -30,7 +31,7 @@ async function boot() {
   window['Blazor'].reconnect = async () => {
     const reconnection = await initializeConnection(circuitHandlers);
     if (!await reconnection.invoke<Boolean>('ConnectCircuit', circuitId)) {
-      throw new Error('Failed to reconnect to the server. The supplied circuitId is no longer valid');
+      throw new Error('Failed to reconnect to the server. The supplied circuitId is invalid.');
     }
 
     circuitHandlers.forEach(h => h.onConnectionUp && h.onConnectionUp());
@@ -61,7 +62,7 @@ async function initializeConnection(circuitHandlers: CircuitHandler[]): Promise<
   connection.onclose(error => circuitHandlers.forEach(h => h.onConnectionDown && h.onConnectionDown(error)));
   connection.on('JS.Error', error => unhandledError(connection, error));
 
-  window['Blazor']._internal.forceCloseConnection = connection.stop;
+  window['Blazor']._internal.forceCloseConnection = () => connection.stop();
 
   try {
     await connection.start();

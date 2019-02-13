@@ -23,7 +23,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
             // Arrange
             var serviceScope = new Mock<IServiceScope>();
             var remoteRenderer = GetRemoteRenderer();
-            var circuitHost = GetCircuitHost(
+            var circuitHost = TestCircuitHost.Create(
                 serviceScope.Object,
                 remoteRenderer);
 
@@ -68,7 +68,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
                 .Returns(Task.CompletedTask)
                 .Verifiable();
 
-            var circuitHost = GetCircuitHost(handlers: new[] { handler1.Object, handler2.Object });
+            var circuitHost = TestCircuitHost.Create(handlers: new[] { handler1.Object, handler2.Object });
 
             // Act
             await circuitHost.InitializeAsync(cancellationToken);
@@ -111,7 +111,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
                 .Returns(Task.CompletedTask)
                 .Verifiable();
 
-            var circuitHost = GetCircuitHost(handlers: new[] { handler1.Object, handler2.Object });
+            var circuitHost = TestCircuitHost.Create(handlers: new[] { handler1.Object, handler2.Object });
 
             // Act
             await circuitHost.DisposeAsync();
@@ -119,29 +119,6 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
             // Assert
             handler1.VerifyAll();
             handler2.VerifyAll();
-        }
-
-        private static CircuitHost GetCircuitHost(
-            IServiceScope serviceScope = null,
-            RemoteRenderer remoteRenderer = null,
-            CircuitHandler[] handlers = null)
-        {
-            serviceScope = serviceScope ?? Mock.Of<IServiceScope>();
-            var clientProxy = new DelegatingClientProxy { Client = Mock.Of<IClientProxy>() };
-            var renderRegistry = new RendererRegistry();
-            var jsRuntime = Mock.Of<IJSRuntime>();
-
-            remoteRenderer = remoteRenderer ?? GetRemoteRenderer();
-            handlers = handlers ?? Array.Empty<CircuitHandler>();
-
-            return new CircuitHost(
-                serviceScope,
-                clientProxy,
-                renderRegistry,
-                remoteRenderer,
-                configure: _ => { },
-                jsRuntime: jsRuntime,
-                handlers);
         }
 
         private static TestRemoteRenderer GetRemoteRenderer()
