@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Components.Browser.Rendering;
 using Microsoft.AspNetCore.Components.Builder;
 using Microsoft.AspNetCore.Components.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 
 namespace Microsoft.AspNetCore.Components.Server.Circuits
@@ -18,6 +19,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
         private static readonly AsyncLocal<CircuitHost> _current = new AsyncLocal<CircuitHost>();
         private readonly IServiceScope _scope;
         private readonly CircuitHandler[] _circuitHandlers;
+        private readonly ILogger _logger;
         private bool _initialized;
 
         private Action<IComponentsApplicationBuilder> _configure;
@@ -49,19 +51,23 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
 
         public CircuitHost(
             IServiceScope scope,
-            DelegatingClientProxy client,
+            CircuitClientProxy client,
             RendererRegistry rendererRegistry,
             RemoteRenderer renderer,
+            RemoteJSRuntime jsRuntime,
+            RemoteUriHelper remoteUriHelper,
             Action<IComponentsApplicationBuilder> configure,
-            IJSRuntime jsRuntime,
-            CircuitHandler[] circuitHandlers)
+            CircuitHandler[] circuitHandlers,
+            ILogger logger)
         {
             _scope = scope ?? throw new ArgumentNullException(nameof(scope));
-            Client = client ?? throw new ArgumentNullException(nameof(client));
+            CircuitClient = client ?? throw new ArgumentNullException(nameof(client));
             RendererRegistry = rendererRegistry ?? throw new ArgumentNullException(nameof(rendererRegistry));
             Renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
-            _configure = configure ?? throw new ArgumentNullException(nameof(configure));
+            RemoteUriHelper = remoteUriHelper ?? throw new ArgumentNullException(nameof(remoteUriHelper));
             JSRuntime = jsRuntime ?? throw new ArgumentNullException(nameof(jsRuntime));
+            _configure = configure ?? throw new ArgumentNullException(nameof(configure));
+            _logger = logger;
 
             Services = scope.ServiceProvider;
 
@@ -76,13 +82,15 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
 
         public Circuit Circuit { get; }
 
-        public DelegatingClientProxy Client { get; }
+        public CircuitClientProxy CircuitClient { get; set; }
 
-        public IJSRuntime JSRuntime { get; }
+        public RemoteJSRuntime JSRuntime { get; }
 
         public RemoteRenderer Renderer { get; }
 
         public RendererRegistry RendererRegistry { get; }
+
+        public RemoteUriHelper RemoteUriHelper { get; }
 
         public IServiceProvider Services { get; }
 
@@ -155,15 +163,24 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
 
         public async ValueTask DisposeAsync()
         {
-            await Renderer.InvokeAsync(async () =>
-            {
-                await OnConnectionDownAsync();
+            _logger.DisposingCircuit(CircuitId);
 
-                for (var i = 0; i < _circuitHandlers.Length; i++)
+            try
+            {
+                await Renderer.InvokeAsync(async () =>
                 {
-                    await _circuitHandlers[i].OnCircuitClosedAsync(Circuit, default);
-                }
-            });
+                    await OnConnectionDownAsync();
+
+                    for (var i = 0; i < _circuitHandlers.Length; i++)
+                    {
+                        await _circuitHandlers[i].OnCircuitClosedAsync(Circuit, default);
+                    }
+                });
+            }
+            catch (Exception exception)
+            {
+                _logger.UnhandledExceptionInvokingCircuitHandler(exception);
+            }
 
             _scope.Dispose();
             Renderer.Dispose();

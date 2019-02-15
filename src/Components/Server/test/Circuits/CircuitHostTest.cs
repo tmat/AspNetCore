@@ -133,7 +133,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
         private class TestRemoteRenderer : RemoteRenderer
         {
             public TestRemoteRenderer(IServiceProvider serviceProvider, RendererRegistry rendererRegistry, IJSRuntime jsRuntime, IClientProxy client)
-                : base(serviceProvider, rendererRegistry, jsRuntime, client, CreateDefaultDispatcher(), NullLogger.Instance)
+                : base(serviceProvider, rendererRegistry, jsRuntime, new CircuitClientProxy(client, "test-id"), CreateDefaultDispatcher(), NullLogger.Instance)
             {
             }
 

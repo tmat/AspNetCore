@@ -22,7 +22,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
         /// <param name="jsRuntime"></param>
         public RemoteUriHelper(IJSRuntime jsRuntime)
         {
-            _jsRuntime = jsRuntime;
+            _jsRuntime = jsRuntime ?? throw new ArgumentNullException(nameof(jsRuntime));
         }
 
         /// <summary>

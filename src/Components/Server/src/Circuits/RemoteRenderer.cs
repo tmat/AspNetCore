@@ -22,13 +22,14 @@ namespace Microsoft.AspNetCore.Components.Browser.Rendering
         private const int TimeoutMilliseconds = 60 * 1000;
 
         private readonly int _id;
-        private readonly IClientProxy _client;
+        private readonly CircuitClientProxy _client;
         private readonly IJSRuntime _jsRuntime;
         private readonly RendererRegistry _rendererRegistry;
         private readonly ConcurrentDictionary<long, AutoCancelTaskCompletionSource<object>> _pendingRenders
             = new ConcurrentDictionary<long, AutoCancelTaskCompletionSource<object>>();
         private readonly ILogger _logger;
         private long _nextRenderId = 1;
+        private byte[] _disconnectedBatchBytes;
 
         /// <summary>
         /// Notifies when a rendering exception occured.
@@ -47,7 +48,7 @@ namespace Microsoft.AspNetCore.Components.Browser.Rendering
             IServiceProvider serviceProvider,
             RendererRegistry rendererRegistry,
             IJSRuntime jsRuntime,
-            IClientProxy client,
+            CircuitClientProxy client,
             IDispatcher dispatcher,
             ILogger logger)
             : base(serviceProvider, dispatcher)
@@ -115,8 +116,34 @@ namespace Microsoft.AspNetCore.Components.Browser.Rendering
             //       buffer on every render.
             var batchBytes = MessagePackSerializer.Serialize(batch, RenderBatchFormatterResolver.Instance);
 
+            if (_client.Connected)
+            {
+                return WriteBatchBytes(batchBytes);
+            }
+            else
+            {
+                _disconnectedBatchBytes = batchBytes;
+                return Task.CompletedTask;
+            }
+        }
+
+        public virtual Task DispatchBufferedRenderAsync()
+        {
+            var disconnectedBatchBytes = Interlocked.Exchange(ref _disconnectedBatchBytes, null);
+            if (disconnectedBatchBytes != null)
+            {
+                // A render was stashed when the client was disconnected. Write it out first
+                return WriteBatchBytes(disconnectedBatchBytes);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        private Task WriteBatchBytes(byte[] batchBytes)
+        {
             // Prepare to track the render process with a timeout
             var renderId = Interlocked.Increment(ref _nextRenderId);
+
             var pendingRenderInfo = new AutoCancelTaskCompletionSource<object>(TimeoutMilliseconds);
             _pendingRenders[renderId] = pendingRenderInfo;
 

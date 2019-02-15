@@ -6,7 +6,6 @@ using System.Linq;
 using Microsoft.AspNetCore.Components.Browser;
 using Microsoft.AspNetCore.Components.Browser.Rendering;
 using Microsoft.AspNetCore.Components.Rendering;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -35,24 +34,26 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
             _loggerFactory = loggerFactory;
         }
 
-        public override CircuitHost CreateCircuitHost(HttpContext httpContext, IClientProxy client)
+        public override CircuitHost CreateCircuitHost(HubCallerContext hubContext, IClientProxy client)
         {
+            var httpContext = hubContext.GetHttpContext();
             if (!_options.StartupActions.TryGetValue(httpContext.Request.Path, out var config))
             {
                 var message = $"Could not find an ASP.NET Core Components startup action for request path '{httpContext.Request.Path}'.";
                 throw new InvalidOperationException(message);
             }
 
-            var delegatingClient = new DelegatingClientProxy { Client = client };
+            var circuitClient = new CircuitClientProxy(client, hubContext.ConnectionId);
             var scope = _scopeFactory.CreateScope();
-            var jsRuntime = new RemoteJSRuntime(delegatingClient);
+            var jsRuntime = new RemoteJSRuntime(circuitClient);
+            var uriHelper = new RemoteUriHelper(jsRuntime);
             var rendererRegistry = new RendererRegistry();
             var dispatcher = Renderer.CreateDefaultDispatcher();
             var renderer = new RemoteRenderer(
                 scope.ServiceProvider,
                 rendererRegistry,
                 jsRuntime,
-                client,
+                circuitClient,
                 dispatcher,
                 _loggerFactory.CreateLogger<RemoteRenderer>());
 
@@ -60,18 +61,22 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
                 .OrderBy(h => h.Order)
                 .ToArray();
 
+
             var circuitHost = new CircuitHost(
                 scope,
-                delegatingClient,
+                circuitClient,
                 rendererRegistry,
                 renderer,
-                config,
                 jsRuntime,
-                circuitHandlers);
+                uriHelper,
+                config,
+                circuitHandlers,
+                _loggerFactory.CreateLogger<CircuitHost>());
 
             // Initialize per-circuit data that services need
-            (circuitHost.Services.GetRequiredService<IJSRuntimeAccessor>() as DefaultJSRuntimeAccessor).JSRuntime = jsRuntime;
-            (circuitHost.Services.GetRequiredService<ICircuitAccessor>() as DefaultCircuitAccessor).Circuit = circuitHost.Circuit;
+            (scope.ServiceProvider.GetRequiredService<ICircuitAccessor>() as DefaultCircuitAccessor).Circuit = circuitHost.Circuit;
+            (scope.ServiceProvider.GetRequiredService<IJSRuntimeAccessor>() as DefaultJSRuntimeAccessor).JSRuntime = jsRuntime;
+            scope.ServiceProvider.GetRequiredService<UriHelperAccessor>().UriHelper = uriHelper;
 
             return circuitHost;
         }

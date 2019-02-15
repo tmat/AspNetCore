@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.JSInterop;
 using Moq;
 
 namespace Microsoft.AspNetCore.Components.Server.Circuits
@@ -18,12 +17,14 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
         public static CircuitHost Create(
             IServiceScope serviceScope = null,
             RemoteRenderer remoteRenderer = null,
-            CircuitHandler[] handlers = null)
+            CircuitHandler[] handlers = null,
+            string connectionId = "connection0")
         {
             serviceScope = serviceScope ?? Mock.Of<IServiceScope>();
-            var clientProxy = new DelegatingClientProxy { Client = Mock.Of<IClientProxy>() };
+            var clientProxy = new CircuitClientProxy(Mock.Of<IClientProxy>(), connectionId);
             var renderRegistry = new RendererRegistry();
-            var jsRuntime = Mock.Of<IJSRuntime>();
+            var jsRuntime = new RemoteJSRuntime(clientProxy.Client);
+            var remoteUriHelper = new RemoteUriHelper(jsRuntime);
 
             if (remoteRenderer == null)
             {
@@ -42,9 +43,11 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
                 clientProxy,
                 renderRegistry,
                 remoteRenderer,
+                jsRuntime,
+                remoteUriHelper,
                 configure: _ => { },
-                jsRuntime: jsRuntime,
-                handlers);
+                handlers,
+                NullLogger<CircuitHost>.Instance);
         }
     }
 }

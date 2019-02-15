@@ -3,7 +3,7 @@ export class AutoReconnectCircuitHandler implements CircuitHandler {
   modal: HTMLDivElement;
   intervalHandle: number | null;
 
-  constructor(private maxRetries: number = 3, private retryInterval: number = 3000) {
+  constructor(private maxRetries: number = 5, private retryInterval: number = 3000) {
     const modal = document.createElement('div');
     modal.className = "modal";
     modal.appendChild(document.createTextNode("Attempting to reconnect to the server..."));
