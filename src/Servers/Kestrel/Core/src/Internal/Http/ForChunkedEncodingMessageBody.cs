@@ -30,6 +30,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http
         private volatile bool _canceled;
         private Task _pumpTask;
         private Pipe _requestBodyPipe;
+        private int _userCanceled;
 
         public ForChunkedEncoding(bool keepAlive, Http1Connection context)
             : base(context)
@@ -548,7 +549,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http
             BadHttpRequestException.Throw(RequestRejectionReason.BadChunkSizeData);
             return -1; // can't happen, but compiler complains
         }
-        private ReadResult _previousReadResult;
+        private ReadResult _readResult;
 
         public override void AdvanceTo(SequencePosition consumed)
         {
@@ -557,7 +558,7 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http
 
         public override void AdvanceTo(SequencePosition consumed, SequencePosition examined)
         {
-            var dataLength = _previousReadResult.Buffer.Slice(_previousReadResult.Buffer.Start, consumed).Length;
+            var dataLength = _readResult.Buffer.Slice(_readResult.Buffer.Start, consumed).Length;
             _requestBodyPipe.Reader.AdvanceTo(consumed, examined);
             OnDataRead(dataLength);
         }
@@ -566,10 +567,10 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http
         {
             TryStart();
 
-            var res =_requestBodyPipe.Reader.TryRead(out _previousReadResult);
-            readResult = _previousReadResult;
+            var res =_requestBodyPipe.Reader.TryRead(out _readResult);
+            readResult = _readResult;
 
-            if (_previousReadResult.IsCompleted)
+            if (_readResult.IsCompleted)
             {
                 TryStop();
             }
@@ -582,24 +583,33 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http
 
             while (true)
             {
-                _previousReadResult = await StartTimingReadAsync(cancellationToken);
-                var readableBuffer = _previousReadResult.Buffer;
+                _readResult = await StartTimingReadAsync(cancellationToken);
+                var readableBuffer = _readResult.Buffer;
                 var readableBufferLength = readableBuffer.Length;
                 StopTimingRead(readableBufferLength);
+
+                if (_readResult.IsCanceled)
+                {
+                    if (Interlocked.CompareExchange(ref _userCanceled, 0, 1) == 1)
+                    {
+                        // Ignore the readResult if it wasn't by the user.
+                        break;
+                    }
+                }
 
                 if (readableBufferLength != 0)
                 {
                     break;
                 }
 
-                if (_previousReadResult.IsCompleted)
+                if (_readResult.IsCompleted)
                 {
                     TryStop();
                     break;
                 }
             }
 
-            return _previousReadResult;
+            return _readResult;
         }
 
         private ValueTask<ReadResult> StartTimingReadAsync(CancellationToken cancellationToken)
@@ -637,12 +647,13 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http
 
         public override void OnWriterCompleted(Action<Exception, object> callback, object state)
         {
-            throw new NotImplementedException();
+            _requestBodyPipe.Reader.OnWriterCompleted(callback, state);
         }
 
         public override void CancelPendingRead()
         {
-            throw new NotImplementedException();
+            Interlocked.Exchange(ref _userCanceled, 1);
+            _requestBodyPipe.Reader.CancelPendingRead();
         }
 
         private enum Mode
