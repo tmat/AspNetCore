@@ -127,7 +127,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
             CircuitHandler[] handlers = null)
         {
             serviceScope = serviceScope ?? Mock.Of<IServiceScope>();
-            var clientProxy = Mock.Of<IClientProxy>();
+            var clientProxy = Mock.Of<ClientProxy>();
             var renderRegistry = new RendererRegistry();
             var jsRuntime = Mock.Of<IJSRuntime>();
 
@@ -150,12 +150,12 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
                 Mock.Of<IServiceProvider>(),
                 new RendererRegistry(),
                 Mock.Of<IJSRuntime>(),
-                Mock.Of<IClientProxy>());
+                Mock.Of<ClientProxy>());
         }
 
         private class TestRemoteRenderer : RemoteRenderer
         {
-            public TestRemoteRenderer(IServiceProvider serviceProvider, RendererRegistry rendererRegistry, IJSRuntime jsRuntime, IClientProxy client)
+            public TestRemoteRenderer(IServiceProvider serviceProvider, RendererRegistry rendererRegistry, IJSRuntime jsRuntime, ClientProxy client)
                 : base(serviceProvider, rendererRegistry, jsRuntime, client, CreateDefaultDispatcher(), NullLogger.Instance)
             {
             }

@@ -35,7 +35,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
             _loggerFactory = loggerFactory;
         }
 
-        public override CircuitHost CreateCircuitHost(HttpContext httpContext, IClientProxy client)
+        public override CircuitHost CreateCircuitHost(HttpContext httpContext, ClientProxy client)
         {
             if (!_options.StartupActions.TryGetValue(httpContext.Request.Path, out var config))
             {

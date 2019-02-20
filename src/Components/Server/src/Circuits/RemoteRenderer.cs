@@ -22,7 +22,7 @@ namespace Microsoft.AspNetCore.Components.Browser.Rendering
         private const int TimeoutMilliseconds = 60 * 1000;
 
         private readonly int _id;
-        private readonly IClientProxy _client;
+        private readonly ClientProxy _client;
         private readonly IJSRuntime _jsRuntime;
         private readonly RendererRegistry _rendererRegistry;
         private readonly ConcurrentDictionary<long, AutoCancelTaskCompletionSource<object>> _pendingRenders
@@ -41,13 +41,13 @@ namespace Microsoft.AspNetCore.Components.Browser.Rendering
         /// <param name="serviceProvider">The <see cref="IServiceProvider"/>.</param>
         /// <param name="rendererRegistry">The <see cref="RendererRegistry"/>.</param>
         /// <param name="jsRuntime">The <see cref="IJSRuntime"/>.</param>
-        /// <param name="client">The <see cref="IClientProxy"/>.</param>
+        /// <param name="client">The <see cref="ClientProxy"/>.</param>
         /// <param name="syncContext">A <see cref="SynchronizationContext"/> that can be used to serialize renderer operations.</param>
         public RemoteRenderer(
             IServiceProvider serviceProvider,
             RendererRegistry rendererRegistry,
             IJSRuntime jsRuntime,
-            IClientProxy client,
+            ClientProxy client,
             IDispatcher dispatcher,
             ILogger logger)
             : base(serviceProvider, dispatcher)

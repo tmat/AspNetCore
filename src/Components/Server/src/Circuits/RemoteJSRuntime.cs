@@ -9,9 +9,9 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
 {
     internal class RemoteJSRuntime : JSRuntimeBase
     {
-        private readonly IClientProxy _clientProxy;
+        private readonly ClientProxy _clientProxy;
 
-        public RemoteJSRuntime(IClientProxy clientProxy)
+        public RemoteJSRuntime(ClientProxy clientProxy)
         {
             _clientProxy = clientProxy ?? throw new ArgumentNullException(nameof(clientProxy));
         }

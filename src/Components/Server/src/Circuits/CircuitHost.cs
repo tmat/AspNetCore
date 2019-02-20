@@ -50,7 +50,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
 
         public CircuitHost(
             IServiceScope scope,
-            IClientProxy client,
+            ClientProxy client,
             RendererRegistry rendererRegistry,
             RemoteRenderer renderer,
             Action<IComponentsApplicationBuilder> configure,
@@ -77,7 +77,7 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
 
         public Circuit Circuit { get; }
 
-        public IClientProxy Client { get; }
+        public ClientProxy Client { get; }
 
         public IJSRuntime JSRuntime { get; }
 

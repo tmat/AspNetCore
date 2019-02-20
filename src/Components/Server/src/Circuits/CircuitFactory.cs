@@ -8,6 +8,6 @@ namespace Microsoft.AspNetCore.Components.Server.Circuits
 {
     internal abstract class CircuitFactory
     {
-        public abstract CircuitHost CreateCircuitHost(HttpContext httpContext, IClientProxy client);
+        public abstract CircuitHost CreateCircuitHost(HttpContext httpContext, ClientProxy client);
     }
 }
