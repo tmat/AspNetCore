@@ -135,7 +135,7 @@ namespace Microsoft.AspNetCore.Components.Server
             }
 
             await circuitHost.OnConnectionUpAsync(Context.ConnectionAborted);
-            // Dispatch the buffer, but don't wait for it.
+            // Dispatch buffered renders, but don't wait for it to finish.
             _ = circuitHost.Renderer.DispatchBufferedRenderAsync();
             return true;
         }
@@ -188,7 +188,6 @@ namespace Microsoft.AspNetCore.Components.Server
 
         private static Task<bool> AcquireCircuitLock()
         {
-
             var timeout =
 #if DEBUG
                 Debugger.IsAttached ? TimeSpan.FromMilliseconds(-1) : LockAcquisitionTimeout;
