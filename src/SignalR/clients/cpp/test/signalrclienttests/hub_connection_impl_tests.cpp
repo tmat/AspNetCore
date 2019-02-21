@@ -562,7 +562,7 @@ TEST(receive, logs_if_callback_for_given_id_not_found)
         std::string responses[]
         {
             "{ }\x1e",
-            "{ \"type\": 3, \"invocationId\": \"0\" }\x1e"
+            "{ \"type\": 3, \"invocationId\": \"0\" }\x1e",
             "{}"
         };
 
